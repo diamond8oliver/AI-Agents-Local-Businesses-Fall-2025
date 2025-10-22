@@ -1,3 +1,4 @@
+
 'use client'
 
 import Link from 'next/link'
@@ -5,14 +6,12 @@ import { useEffect } from 'react'
 
 export default function DemoPage() {
   useEffect(() => {
-    // Load widget script
     const script = document.createElement('script')
     script.src = 'https://web-production-902d.up.railway.app/widget/widget.js'
     script.setAttribute('data-api-key', '4644670e-936f-4688-87ed-b38d45e3d4e9')
     document.body.appendChild(script)
 
     return () => {
-      // Cleanup
       if (document.body.contains(script)) {
         document.body.removeChild(script)
       }
@@ -47,19 +46,19 @@ export default function DemoPage() {
           <ul className="space-y-3">
             <li className="flex items-start gap-3">
               <span className="text-orange-600 font-bold text-xl">•</span>
-              <span className="text-gray-800">"Show me shoes under $100"</span>
+              <span className="text-gray-800">{`"Show me shoes under $100"`}</span>
             </li>
             <li className="flex items-start gap-3">
               <span className="text-orange-600 font-bold text-xl">•</span>
-              <span className="text-gray-800">"What Nike products do you have?"</span>
+              <span className="text-gray-800">{`"What Nike products do you have?"`}</span>
             </li>
             <li className="flex items-start gap-3">
               <span className="text-orange-600 font-bold text-xl">•</span>
-              <span className="text-gray-800">"Compare your skateboards"</span>
+              <span className="text-gray-800">{`"Compare your skateboards"`}</span>
             </li>
             <li className="flex items-start gap-3">
               <span className="text-orange-600 font-bold text-xl">•</span>
-              <span className="text-gray-800">"What's in stock right now?"</span>
+              <span className="text-gray-800">{`"What's in stock right now?"`}</span>
             </li>
           </ul>
         </div>
@@ -69,7 +68,7 @@ export default function DemoPage() {
             👉 Click the chat bubble in the bottom right to start!
           </p>
           <p className="text-center text-sm text-gray-600">
-            This is a live demo using Atlas Skateboarding's real product catalog
+            This is a live demo using Atlas Skateboarding{`'`}s real product catalog
           </p>
         </div>
       </div>
