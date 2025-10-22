@@ -163,7 +163,12 @@ pip freeze > requirements.txt
 
 Built by Syracuse University students for local Syracuse businesses.
 
-**Contributors:** [Add team members]
+**Contributors:** 
+Oliver Diamond
+Ryan Walsh
+Logan Brown
+Ignacio Marro
+Jake Machemer
 
 ## License
 
