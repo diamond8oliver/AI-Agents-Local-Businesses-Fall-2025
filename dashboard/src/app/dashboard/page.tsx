@@ -33,7 +33,7 @@ export default async function Dashboard() {
               <h2 className="text-xl font-semibold mb-4 text-gray-900">Widget Code</h2>
               <p className="text-sm text-gray-600 mb-2">Add this to your website:</p>
               <pre className="bg-gray-100 p-4 rounded overflow-x-auto text-gray-900">
-{`<script src="https://your-widget-url.com/widget.js" data-api-key="${business.api_key}"></script>`}
+{`<script src="https://web-production-902d.up.railway.app/widget/widget.js" data-api-key="${business.api_key}"></script>`}
               </pre>
             </div>
           </div>
