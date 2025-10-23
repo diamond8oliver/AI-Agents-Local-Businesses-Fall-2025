@@ -41,7 +41,7 @@ export default function Home() {
           
           <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
             Turn your website visitors into customers with AI-powered product search. 
-            Help shoppers find exactly what they're looking for in seconds, not minutes.
+            Help shoppers find exactly what they&apos;re looking for in seconds, not minutes.
           </p>
 
           <div className="flex gap-6 justify-center flex-wrap">
