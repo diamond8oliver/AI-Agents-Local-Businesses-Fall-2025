@@ -20,7 +20,7 @@ export default function LandingPage() {
               <Link href="/demo" className="text-gray-600 hover:text-orange-600 font-medium transition-colors">
                 Demo
               </Link>
-              <Link href="/sign-in" className="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-6 py-2.5 rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200 font-semibold">
+              <Link href="/dashboard" className="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-6 py-2.5 rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200 font-semibold">
                 Get Started
               </Link>
             </div>
@@ -54,7 +54,7 @@ export default function LandingPage() {
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <Link 
-              href="/sign-in" 
+              href="/dashboard" 
               className="group bg-gradient-to-r from-orange-600 to-orange-500 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:shadow-2xl hover:scale-105 transition-all duration-200 flex items-center justify-center gap-2"
             >
               Get Free Setup 
@@ -200,7 +200,7 @@ export default function LandingPage() {
             Join Syracuse businesses using AI to increase sales and improve customer experience.
           </p>
           <Link 
-            href="/sign-in" 
+            href="/dashboard" 
             className="inline-flex items-center gap-2 bg-white text-orange-600 px-10 py-5 rounded-xl text-lg font-bold hover:shadow-2xl hover:scale-105 transition-all duration-200"
           >
             Get Started Free 
@@ -291,7 +291,7 @@ function PricingCard({ name, price, features, highlighted = false }: {
       </ul>
       
       <Link 
-        href="/sign-in" 
+        href="/dashboard" 
         className={`block text-center py-4 rounded-xl font-bold transition-all duration-200 ${
           highlighted 
             ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white hover:shadow-xl hover:scale-105' 
