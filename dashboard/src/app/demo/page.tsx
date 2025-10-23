@@ -69,7 +69,7 @@ export default function DemoPage() {
             👉 Click the chat bubble in the bottom right to start!
           </p>
           <p className="text-center text-sm text-gray-500">
-            This is a live demo using Atlas Skateboarding's real product catalog
+            {`This is a live demo using Atlas Skateboarding's real product catalog`}
           </p>
         </div>
       </div>
