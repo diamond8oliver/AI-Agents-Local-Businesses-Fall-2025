@@ -7,6 +7,7 @@ from src.config.settings import get_settings
 from src.api.routes.crawl import router as crawl_router
 from src.api.routes.agent import router as agent_router
 
+print("APP STARTING", flush=True)
 settings = get_settings()
 
 app = FastAPI(title="Local Business AI Agent Platform", debug=settings.debug)
