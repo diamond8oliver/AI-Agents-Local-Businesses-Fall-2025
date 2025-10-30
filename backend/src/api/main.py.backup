@@ -6,9 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.config.settings import get_settings
 from src.api.routes.crawl import router as crawl_router
 from src.api.routes.agent import router as agent_router
-from src.api.routes.widget import router as widget_router
 
-print("APP STARTING", flush=True)
 settings = get_settings()
 
 app = FastAPI(title="Local Business AI Agent Platform", debug=settings.debug)
@@ -41,4 +39,5 @@ async def config_preview():
 
 app.include_router(crawl_router)
 app.include_router(agent_router)
-app.include_router(widget_router)
+
+
