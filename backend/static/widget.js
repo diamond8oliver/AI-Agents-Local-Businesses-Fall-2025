@@ -32,9 +32,9 @@
           body: JSON.stringify({question: question, k: 5})
         });
         const data = await response.json();
-        messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;padding:8px 12px;border-radius:12px;display:inline-block;">' + (data.answer || 'Sorry, I could not find an answer.') + '</span></div>';
+        messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a2e;padding:8px 12px;border-radius:12px;display:inline-block;">' + (data.answer || 'Sorry, I could not find an answer.') + '</span></div>';
       } catch(err) {
-        messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;padding:8px 12px;border-radius:12px;display:inline-block;">Error: ' + err.message + '</span></div>';
+        messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a2e;padding:8px 12px;border-radius:12px;display:inline-block;">Error: ' + err.message + '</span></div>';
       }
       messages.scrollTop = messages.scrollHeight;
     }
