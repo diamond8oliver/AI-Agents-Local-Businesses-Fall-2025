@@ -25,6 +25,11 @@
       messages.innerHTML += '<div style="margin:8px 0;text-align:right;"><span style="background:#FF6B35;color:white;padding:8px 12px;border-radius:12px;display:inline-block;">' + question + '</span></div>';
       input.value = '';
       
+      // Show typing indicator
+      const typingId = 'typing-' + Date.now();
+      messages.innerHTML += '<div id="' + typingId + '" style="margin:8px 0;"><span style="background:#f0f0f0;color:#666;padding:8px 12px;border-radius:12px;display:inline-block;font-style:italic;">AI is thinking...</span></div>';
+      messages.scrollTop = messages.scrollHeight;
+      
       try {
         const response = await fetch('https://web-production-902d.up.railway.app/agent/ask', {
           method: 'POST',
@@ -32,6 +37,9 @@
           body: JSON.stringify({question: question, k: 5})
         });
         const data = await response.json();
+        
+        // Remove typing indicator
+        document.getElementById(typingId).remove();
         
         // Display answer with darker text
         messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a1a;padding:8px 12px;border-radius:12px;display:inline-block;">' + (data.answer || 'Sorry, I could not find an answer.') + '</span></div>';
@@ -49,6 +57,10 @@
           messages.innerHTML += productLinks;
         }
       } catch(err) {
+        // Remove typing indicator on error
+        const typingElem = document.getElementById(typingId);
+        if (typingElem) typingElem.remove();
+        
         messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a1a;padding:8px 12px;border-radius:12px;display:inline-block;">Error: ' + err.message + '</span></div>';
       }
       messages.scrollTop = messages.scrollHeight;
