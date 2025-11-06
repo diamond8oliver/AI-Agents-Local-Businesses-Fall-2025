@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.config.settings import get_settings
-from src.api.routes.crawl import router as crawl_router
+# from src.api.routes.crawl import router as crawl_router
 from src.api.routes.agent import router as agent_router
 from src.api.routes.widget import router as widget_router
 
@@ -43,6 +43,6 @@ async def config_preview():
     }
 
 
-app.include_router(crawl_router)
+# app.include_router(crawl_router)
 app.include_router(agent_router)
 app.include_router(widget_router)
