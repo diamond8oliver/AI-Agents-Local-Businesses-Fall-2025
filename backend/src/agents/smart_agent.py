@@ -1,7 +1,10 @@
 from typing import Dict, List
-from openai import OpenAI
+from anthropic import Anthropic
 from src.database.supabase_client import get_supabase_client
 import re
+import os
+
+client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 SMART_SYSTEM_PROMPT = """You are an intelligent shopping assistant for a local business.
 
@@ -11,18 +14,17 @@ Your capabilities:
 3. Product comparisons highlighting key differences
 4. Upsell/cross-sell suggestions
 5. Stock awareness
+6. Remember conversation context
 
 When answering:
 - Be helpful and conversational
+- Reference previous questions when relevant
 - Highlight key product features
 - Mention prices clearly
 - Note stock status
-- Suggest alternatives when needed
-- If comparing, create a clear comparison table
-"""
+- Suggest alternatives when needed"""
 
 def detect_intent(question: str) -> List[str]:
-    """Detect what the user wants to do"""
     intents = []
     question_lower = question.lower()
     
@@ -40,11 +42,9 @@ def detect_intent(question: str) -> List[str]:
     return intents if intents else ['search']
 
 def extract_filters(question: str) -> Dict:
-    """Extract price, size, color filters from question"""
     filters = {}
     question_lower = question.lower()
     
-    # Price extraction
     price_patterns = [
         r'under\s+\$?(\d+)',
         r'below\s+\$?(\d+)',
@@ -61,13 +61,11 @@ def extract_filters(question: str) -> Dict:
             else:
                 filters['max_price'] = int(match.group(1))
     
-    # Color extraction
     colors = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown', 'gray', 'grey']
     for color in colors:
         if color in question_lower:
             filters['color'] = color
     
-    # Size extraction (numbers like 10, 10.5, or words like small, medium, large)
     size_match = re.search(r'size\s+(\d+\.?\d*|small|medium|large|xl|xxl)', question_lower)
     if size_match:
         filters['size'] = size_match.group(1)
@@ -75,23 +73,19 @@ def extract_filters(question: str) -> Dict:
     return filters
 
 def search_products_smart(query: str, filters: Dict, business_id: str, k: int = 10) -> List[Dict]:
-    """Smart product search with filters"""
     supabase = get_supabase_client()
     
-    # Build query
     query_builder = supabase.table("products").select("*").eq("business_id", business_id)
     
-    # Apply price filters
     if 'max_price' in filters:
         query_builder = query_builder.lte("price", filters['max_price'])
     if 'min_price' in filters:
         query_builder = query_builder.gte("price", filters['min_price'])
     
-    # Text search across multiple fields
     keywords = [w for w in query.lower().split() if len(w) > 3]
     if keywords:
         search_conditions = []
-        for keyword in keywords[:3]:  # Limit to 3 keywords
+        for keyword in keywords[:3]:
             search_conditions.extend([
                 f"name.ilike.%{keyword}%",
                 f"description.ilike.%{keyword}%",
@@ -101,11 +95,9 @@ def search_products_smart(query: str, filters: Dict, business_id: str, k: int = 
         if search_conditions:
             query_builder = query_builder.or_(",".join(search_conditions))
     
-    # Execute
-    response = query_builder.limit(k * 2).execute()  # Get more for filtering
+    response = query_builder.limit(k * 2).execute()
     products = response.data if response.data else []
     
-    # Post-filter for color and size (since they're in JSONB)
     filtered = []
     for p in products:
         if 'color' in filters:
@@ -126,20 +118,11 @@ def search_products_smart(query: str, filters: Dict, business_id: str, k: int = 
     
     return filtered[:k]
 
-def answer_question_smart(question: str, business_id: str = "4644670e-936f-4688-87ed-b38d0f9a8f47", k: int = 5) -> Dict:
-    """Smart agent with recommendations, comparisons, and upsell"""
-    client = OpenAI()
-    
-    # Detect intent
+def answer_question_smart(question: str, business_id: str, k: int, conversation_history: List[Dict] = None) -> Dict:
     intents = detect_intent(question)
-    
-    # Extract filters
     filters = extract_filters(question)
-    
-    # Search products
     products = search_products_smart(question, filters, business_id, k)
     
-    # Build context
     if products:
         context_blocks = []
         for i, product in enumerate(products, 1):
@@ -162,41 +145,38 @@ def answer_question_smart(question: str, business_id: str = "4644670e-936f-4688-
             context_blocks.append(block)
         context = "\n".join(context_blocks)
     else:
-        context = "No products found matching the criteria."
+        context = "No products found."
     
-    # Add intent-specific instructions
+    history_text = ""
+    if conversation_history:
+        history_text = "\n\nPREVIOUS CONVERSATION:\n"
+        for msg in conversation_history[-3:]:
+            history_text += f"User: {msg['question']}\nAssistant: {msg['answer'][:100]}...\n\n"
+    
     intent_instruction = ""
     if 'compare' in intents:
-        intent_instruction = "\n\nThe user wants to COMPARE products. Create a clear comparison highlighting differences in features, price, and use cases."
+        intent_instruction = "\n\nThe user wants to COMPARE products."
     elif 'recommend' in intents:
-        intent_instruction = "\n\nThe user wants RECOMMENDATIONS. Suggest the best options based on their needs and explain why."
+        intent_instruction = "\n\nThe user wants RECOMMENDATIONS."
     
-    # Build prompt
     user_prompt = f"""PRODUCTS:
 {context}
-
-QUESTION: {question}
+{history_text}
+CURRENT QUESTION: {question}
 {intent_instruction}
 
-Additional instructions:
-- Always suggest upsell/cross-sell options if relevant
-- Mention if premium versions exist
-- Note any products that are out of stock
-- Be conversational and helpful
-"""
+Remember context from previous messages and provide helpful, conversational responses."""
     
-    messages = [
-        {"role": "system", "content": SMART_SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt}
-    ]
-    
-    # Get AI response
-    chat = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        temperature=0.3
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        system=SMART_SYSTEM_PROMPT,
+        messages=[
+            {"role": "user", "content": user_prompt}
+        ]
     )
-    answer = chat.choices[0].message.content
+    
+    answer = message.content[0].text
     
     return {
         "answer": answer,
