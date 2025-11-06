@@ -32,9 +32,24 @@
           body: JSON.stringify({question: question, k: 5})
         });
         const data = await response.json();
-        messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a2e;padding:8px 12px;border-radius:12px;display:inline-block;">' + (data.answer || 'Sorry, I could not find an answer.') + '</span></div>';
+        
+        // Display answer with darker text
+        messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a1a;padding:8px 12px;border-radius:12px;display:inline-block;">' + (data.answer || 'Sorry, I could not find an answer.') + '</span></div>';
+        
+        // Display product links if available
+        if (data.products && data.products.length > 0) {
+          let productLinks = '<div style="margin:8px 0;"><div style="background:#f9f9f9;padding:8px;border-radius:8px;"><strong style="color:#1a1a1a;">Products:</strong><ul style="margin:4px 0;padding-left:20px;">';
+          data.products.forEach(p => {
+            if (p.url) {
+              const stockText = p.in_stock === false ? ' (Out of Stock)' : '';
+              productLinks += '<li style="margin:4px 0;color:#1a1a1a;"><a href="' + p.url + '" target="_blank" style="color:#FF6B35;text-decoration:none;">' + p.name + ' - $' + p.price + stockText + '</a></li>';
+            }
+          });
+          productLinks += '</ul></div></div>';
+          messages.innerHTML += productLinks;
+        }
       } catch(err) {
-        messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a2e;padding:8px 12px;border-radius:12px;display:inline-block;">Error: ' + err.message + '</span></div>';
+        messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a1a;padding:8px 12px;border-radius:12px;display:inline-block;">Error: ' + err.message + '</span></div>';
       }
       messages.scrollTop = messages.scrollHeight;
     }

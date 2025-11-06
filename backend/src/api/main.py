@@ -8,9 +8,11 @@ from slowapi.errors import RateLimitExceeded
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.config.settings import get_settings
-# from src.api.routes.crawl import router as crawl_router
 from src.api.routes.agent import router as agent_router
+from src.api.routes.analytics import router as analytics_router
+from src.api.routes.tiers import router as tiers_router
 from src.api.routes.widget import router as widget_router
+from src.api.routes.webhooks import router as webhooks_router
 
 print("APP STARTING - THIS SHOULD APPEAR IN LOGS", flush=True)
 settings = get_settings()
@@ -27,22 +29,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-
 @app.get("/config")
 async def config_preview():
-    # Do not return secrets
     return {
         "debug": settings.debug,
         "database_url": settings.database_url.split("@")[0] if "@" in settings.database_url else settings.database_url,
         "redis_url": settings.redis_url,
     }
 
-
-# app.include_router(crawl_router)
+# Register all routers
 app.include_router(agent_router)
+app.include_router(analytics_router)
+app.include_router(tiers_router)
 app.include_router(widget_router)
+app.include_router(webhooks_router)
