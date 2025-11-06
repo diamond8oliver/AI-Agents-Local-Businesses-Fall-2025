@@ -9,7 +9,7 @@ async def trigger_crawl(business_id: str, website_url: str):
     async with httpx.AsyncClient(timeout=300.0) as client:
         try:
             await client.post(
-                "http://localhost:8000/product-crawl/",
+                "https://web-production-902d.up.railway.app/product-crawl/",
                 json={
                     "start_url": website_url,
                     "max_pages": 100,
@@ -24,14 +24,12 @@ async def business_created(background_tasks: BackgroundTasks, business_id: str, 
     """Webhook triggered when a business signs up"""
     supabase = get_supabase_client()
     
-    # Log the webhook
     supabase.table('webhook_logs').insert({
         'business_id': business_id,
         'event': 'business_created',
         'status': 'processing'
     }).execute()
     
-    # Trigger crawl in background
     background_tasks.add_task(trigger_crawl, business_id, website_url)
     
     return {"status": "crawl_scheduled"}
