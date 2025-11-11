@@ -4,8 +4,8 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    # OpenAI
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    # Anthropic
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
     # App / DB
     database_url: str = Field(default="sqlite:///./local_business_ai.db", alias="DATABASE_URL")
@@ -24,5 +24,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
-
