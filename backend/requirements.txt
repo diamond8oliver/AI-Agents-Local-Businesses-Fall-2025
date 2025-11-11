@@ -14,7 +14,7 @@ pydantic-settings==2.1.0
 requests==2.31.0
 httpx==0.26.0
 httpcore==1.0.1
-websockets==12.0
+websockets>=13.0
 python-multipart==0.0.6
 twilio==8.10.0
 google-api-python-client==2.125.0
