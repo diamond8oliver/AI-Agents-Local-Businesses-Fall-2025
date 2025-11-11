@@ -1,3 +1,4 @@
+from src.api.routes.crawl import router as crawl_router
 print("=== STARTING APP ===", flush=True)
 import sys
 print(f"Python version: {sys.version}", flush=True)
@@ -54,3 +55,4 @@ app.include_router(widget_router)
 app.include_router(webhooks_router)
 app.include_router(product_crawl_router)
 app.include_router(scheduled_router)
+app.include_router(crawl_router, prefix="/api", tags=["crawl"])
