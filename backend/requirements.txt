@@ -34,4 +34,3 @@ slowapi
 pydantic-settings
 anthropic
 supabase
-supabase
