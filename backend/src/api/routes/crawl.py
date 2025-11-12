@@ -115,7 +115,7 @@ def extract_products(soup: BeautifulSoup, base_url: str) -> list:
                     'name': name,
                     'price': price,
                     'description': description or f"Product: {name}",
-                    'image_url': image_url,
+                    'images': [image_url] if image_url else [],
                     'url': base_url
                 })
         except Exception as e:
