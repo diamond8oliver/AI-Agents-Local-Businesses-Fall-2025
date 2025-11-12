@@ -47,8 +47,8 @@ async def crawl_website(request: CrawlRequest):
         
         business_data = {
             'id': business_id,
-            'name': request.business_name or extract_business_name(soup),
-            'url': str(request.url),
+            'business_name': request.business_name or extract_business_name(soup),
+            'website_url': str(request.url),
             'created_at': datetime.utcnow().isoformat()
         }
         
