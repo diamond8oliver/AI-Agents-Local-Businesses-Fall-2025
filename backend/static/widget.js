@@ -1,4 +1,8 @@
 (function() {
+  // Get business_id from script tag
+  const script = document.currentScript || document.querySelector('script[data-business-id]');
+  const businessId = script ? script.getAttribute('data-business-id') : null;
+  
   const bubble = document.createElement('div');
   bubble.id = 'ai-chat-bubble';
   bubble.innerHTML = '💬';
@@ -25,26 +29,28 @@
       messages.innerHTML += '<div style="margin:8px 0;text-align:right;"><span style="background:#FF6B35;color:white;padding:8px 12px;border-radius:12px;display:inline-block;">' + question + '</span></div>';
       input.value = '';
       
-      // Show typing indicator
       const typingId = 'typing-' + Date.now();
       messages.innerHTML += '<div id="' + typingId + '" style="margin:8px 0;"><span style="background:#f0f0f0;color:#666;padding:8px 12px;border-radius:12px;display:inline-block;font-style:italic;">AI is thinking...</span></div>';
       messages.scrollTop = messages.scrollHeight;
       
       try {
+        // Pass business_id to agent
+        const requestBody = {question: question, k: 5};
+        if (businessId) {
+          requestBody.business_id = businessId;
+        }
+        
         const response = await fetch('https://web-production-902d.up.railway.app/agent/ask', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({question: question, k: 5})
+          body: JSON.stringify(requestBody)
         });
         const data = await response.json();
         
-        // Remove typing indicator
         document.getElementById(typingId).remove();
         
-        // Display answer with darker text
         messages.innerHTML += '<div style="margin:8px 0;"><span style="background:#f0f0f0;color:#1a1a1a;padding:8px 12px;border-radius:12px;display:inline-block;">' + (data.answer || 'Sorry, I could not find an answer.') + '</span></div>';
         
-        // Display product links if available
         if (data.products && data.products.length > 0) {
           let productLinks = '<div style="margin:8px 0;"><div style="background:#f9f9f9;padding:8px;border-radius:8px;"><strong style="color:#1a1a1a;">Products:</strong><ul style="margin:4px 0;padding-left:20px;">';
           data.products.forEach(p => {
@@ -57,7 +63,6 @@
           messages.innerHTML += productLinks;
         }
       } catch(err) {
-        // Remove typing indicator on error
         const typingElem = document.getElementById(typingId);
         if (typingElem) typingElem.remove();
         
