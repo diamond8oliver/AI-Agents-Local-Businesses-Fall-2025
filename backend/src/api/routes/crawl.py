@@ -7,6 +7,7 @@ from playwright.sync_api import sync_playwright
 import time
 import re
 from urllib.parse import urljoin
+import asyncio
 
 router = APIRouter(prefix="/api", tags=["crawl"])
 
@@ -159,8 +160,10 @@ async def crawl_website(req: CrawlRequest):
     print(f"Starting crawl for URL: {req.url}")
     
     try:
-        # Use Playwright to scrape products
-        products, page_title = scrape_with_playwright(req.url, max_products=50)
+        # Run Playwright in thread since it's sync API
+        products, page_title = await asyncio.to_thread(
+            scrape_with_playwright, req.url, 50
+        )
         
         if not products:
             raise HTTPException(status_code=400, detail="No products found on this website")
@@ -178,7 +181,7 @@ async def crawl_website(req: CrawlRequest):
             'id': business_id,
             'business_name': page_title or req.url,
             'website_url': req.url,
-            'created_at': None,  # Let Supabase set timestamp
+            'created_at': None,
         }
         
         print(f"Inserting business: {business_data}")
@@ -197,11 +200,11 @@ async def crawl_website(req: CrawlRequest):
                 'images': [product['image_url']] if product['image_url'] else [],
                 'url': product['url'],
                 'in_stock': True,
-                'created_at': None,  # Let Supabase set timestamp
+                'created_at': None,
             }
             products_to_insert.append(product_data)
         
-        # Insert products in batches of 100
+        # Insert products in batches
         print(f"Inserting {len(products_to_insert)} products")
         batch_size = 100
         for i in range(0, len(products_to_insert), batch_size):
