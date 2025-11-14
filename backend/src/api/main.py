@@ -104,6 +104,6 @@ app.include_router(widget_router)
 app.include_router(webhooks_router)
 app.include_router(product_crawl_router)
 app.include_router(scheduled_router)
-app.include_router(crawl_router, prefix="/api", tags=["crawl"])
+app.include_router(crawl_router)
 
 print("✓ APP STARTED SUCCESSFULLY", flush=True)
