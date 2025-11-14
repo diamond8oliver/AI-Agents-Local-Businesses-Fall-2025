@@ -224,8 +224,3 @@ async def crawl_website(req: CrawlRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to crawl website: {str(e)}")
-```
-
-**Now update `requirements.txt` - add this line:**
-```
-playwright==1.40.0
