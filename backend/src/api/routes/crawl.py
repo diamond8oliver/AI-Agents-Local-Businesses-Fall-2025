@@ -1,234 +1,231 @@
-"""
-Crawl endpoint for scraping business websites and storing products
-"""
-
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
+from typing import Optional
 import uuid
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
 from src.database.supabase_client import get_supabase_client
-import traceback
+from playwright.sync_api import sync_playwright
+import time
+import re
+from urllib.parse import urljoin
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["crawl"])
 
 class CrawlRequest(BaseModel):
-    url: HttpUrl
-    business_name: str = None
+    url: str
 
-class CrawlResponse(BaseModel):
-    business_id: str
-    products_found: int
-    message: str
+def scrape_with_playwright(url: str, max_products: int = 50):
+    """
+    Scrape products from JavaScript-rendered sites using Playwright
+    Returns: list of {name, price, image_url, url, description}
+    """
+    products = []
+    
+    with sync_playwright() as p:
+        # Launch browser (headless for production)
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        
+        try:
+            print(f"Loading page: {url}")
+            # Go to URL and wait for content to load
+            page.goto(url, timeout=30000, wait_until="networkidle")
+            time.sleep(2)  # Extra wait for lazy-loaded content
+            
+            # Get page title for business name
+            page_title = page.title()
+            
+            # Extract products - try multiple selectors
+            product_selectors = [
+                # Shopify
+                'div.product-card, div.product-item, div.grid-product, div.grid__item',
+                # WooCommerce
+                'li.product, div.product, ul.products li',
+                # Generic
+                'article[data-product], div[data-product-id], [class*="product-"]',
+                # Broader fallback
+                'article, li[class*="product"], div[class*="product-card"]',
+            ]
+            
+            elements = []
+            for selector in product_selectors:
+                elements = page.query_selector_all(selector)
+                if len(elements) > 3:  # Need at least a few products
+                    print(f"Found {len(elements)} products with selector: {selector}")
+                    break
+            
+            if not elements or len(elements) < 3:
+                print("No products found with standard selectors")
+                browser.close()
+                return [], page_title
+            
+            # Extract data from each product
+            for element in elements[:max_products]:
+                try:
+                    # Try multiple name selectors
+                    name_selectors = [
+                        'h2', 'h3', 'h4',
+                        '.product-title', '.product__title', '.product-card__title',
+                        '[class*="title"]', '[class*="name"]',
+                        'a[class*="product"]',
+                    ]
+                    name = None
+                    for ns in name_selectors:
+                        name_el = element.query_selector(ns)
+                        if name_el:
+                            name = name_el.inner_text().strip()
+                            if name and len(name) > 3 and len(name) < 200:  # Valid name
+                                break
+                    
+                    # Try multiple price selectors
+                    price_selectors = [
+                        '.price', 'span.price', 'div.price',
+                        '[class*="price"]', '[data-price]',
+                        '.money', 'span.money',
+                    ]
+                    price = 0.0
+                    for ps in price_selectors:
+                        price_el = element.query_selector(ps)
+                        if price_el:
+                            price_text = price_el.inner_text().strip()
+                            # Extract numbers from "$99.99" or "99,99 €"
+                            numbers = re.findall(r'\d+[.,]?\d*', price_text)
+                            if numbers:
+                                price_str = numbers[0].replace(',', '.')
+                                try:
+                                    price = float(price_str)
+                                    break
+                                except:
+                                    continue
+                    
+                    # Description (optional)
+                    description = None
+                    desc_selectors = [
+                        '.product-description', '.description',
+                        '[class*="description"]', 'p',
+                    ]
+                    for ds in desc_selectors:
+                        desc_el = element.query_selector(ds)
+                        if desc_el:
+                            description = desc_el.inner_text().strip()[:500]  # Max 500 chars
+                            if description and len(description) > 10:
+                                break
+                    
+                    # Image
+                    image_url = None
+                    img_el = element.query_selector('img')
+                    if img_el:
+                        image_url = img_el.get_attribute('src') or img_el.get_attribute('data-src')
+                        if image_url and image_url.startswith('//'):
+                            image_url = 'https:' + image_url
+                        elif image_url and not image_url.startswith('http'):
+                            image_url = urljoin(url, image_url)
+                    
+                    # Product URL
+                    product_url = url  # Default to collection page
+                    link_el = element.query_selector('a')
+                    if link_el:
+                        href = link_el.get_attribute('href')
+                        if href:
+                            if href.startswith('http'):
+                                product_url = href
+                            elif href.startswith('/'):
+                                product_url = urljoin(url, href)
+                    
+                    # Only add if we got a valid name
+                    if name and len(name) > 3:
+                        products.append({
+                            'name': name,
+                            'price': price,
+                            'image_url': image_url,
+                            'url': product_url,
+                            'description': description or f"Product: {name}",
+                        })
+                
+                except Exception as e:
+                    print(f"Error extracting product: {e}")
+                    continue
+            
+            browser.close()
+            return products, page_title
+            
+        except Exception as e:
+            print(f"Playwright error: {e}")
+            browser.close()
+            return [], ""
 
-@router.post("/crawl", response_model=CrawlResponse)
-async def crawl_website(request: CrawlRequest):
+@router.post("/crawl")
+async def crawl_website(req: CrawlRequest):
+    """Crawl a website and extract products using Playwright"""
+    print(f"Starting crawl for URL: {req.url}")
+    
     try:
-        print(f"Starting crawl for URL: {request.url}", flush=True)
-        business_id = str(uuid.uuid4())
-        
-        response = requests.get(str(request.url), timeout=10, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-        response.raise_for_status()
-        print(f"Successfully fetched URL", flush=True)
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        products = extract_products(soup, str(request.url))
-        print(f"Extracted {len(products)} products", flush=True)
+        # Use Playwright to scrape products
+        products, page_title = scrape_with_playwright(req.url, max_products=50)
         
         if not products:
             raise HTTPException(status_code=400, detail="No products found on this website")
         
-        print("Connecting to Supabase...", flush=True)
-        supabase = get_supabase_client()
-        print("Connected to Supabase", flush=True)
+        print(f"Extracted {len(products)} products")
         
+        # Connect to Supabase
+        print("Connecting to Supabase...")
+        supabase = get_supabase_client()
+        print("Connected to Supabase")
+        
+        # Create business entry
+        business_id = str(uuid.uuid4())
         business_data = {
             'id': business_id,
-            'business_name': request.business_name or extract_business_name(soup),
-            'website_url': str(request.url),
-            'created_at': datetime.utcnow().isoformat()
+            'business_name': page_title or req.url,
+            'website_url': req.url,
+            'created_at': None,  # Let Supabase set timestamp
         }
         
-        print(f"Inserting business: {business_data}", flush=True)
+        print(f"Inserting business: {business_data}")
         supabase.table('businesses').insert(business_data).execute()
-        print("Business inserted", flush=True)
+        print("Business inserted")
         
+        # Prepare products for insertion
+        products_to_insert = []
         for product in products:
-            product['business_id'] = business_id
-            product['created_at'] = datetime.utcnow().isoformat()
+            product_data = {
+                'id': str(uuid.uuid4()),
+                'business_id': business_id,
+                'name': product['name'],
+                'price': product['price'],
+                'description': product['description'],
+                'images': [product['image_url']] if product['image_url'] else [],
+                'url': product['url'],
+                'in_stock': True,
+                'created_at': None,  # Let Supabase set timestamp
+            }
+            products_to_insert.append(product_data)
         
-        print(f"Inserting {len(products)} products", flush=True)
-        supabase.table('products').insert(products).execute()
-        print("Products inserted", flush=True)
+        # Insert products in batches of 100
+        print(f"Inserting {len(products_to_insert)} products")
+        batch_size = 100
+        for i in range(0, len(products_to_insert), batch_size):
+            batch = products_to_insert[i:i+batch_size]
+            supabase.table('products').insert(batch).execute()
         
-        return CrawlResponse(
-            business_id=business_id,
-            products_found=len(products),
-            message=f"Successfully crawled {len(products)} products"
-        )
+        print("Products inserted")
         
-    except requests.RequestException as e:
-        error_msg = f"Failed to fetch website: {str(e)}"
-        print(f"ERROR: {error_msg}", flush=True)
-        print(traceback.format_exc(), flush=True)
-        raise HTTPException(status_code=400, detail=error_msg)
+        return {
+            "status": "success",
+            "message": f"Successfully crawled {len(products)} products",
+            "business_id": business_id,
+            "product_count": len(products)
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        error_msg = f"Crawl failed: {str(e)}"
-        print(f"ERROR: {error_msg}", flush=True)
-        print(traceback.format_exc(), flush=True)
-        raise HTTPException(status_code=500, detail=error_msg)
+        print(f"ERROR: Crawl failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to crawl website: {str(e)}")
+```
 
-
-def extract_products(soup: BeautifulSoup, base_url: str) -> list:
-    products = []
-    
-    product_selectors = [
-        '.product',
-        '.product-item',
-        '[itemtype*="Product"]',
-        '.woocommerce-loop-product',
-        '.product-card'
-    ]
-    
-    product_elements = []
-    for selector in product_selectors:
-        found = soup.select(selector)
-        if found:
-            product_elements = found
-            break
-    
-    if not product_elements:
-        product_elements = find_products_by_pattern(soup)
-    
-    for element in product_elements[:50]:
-        try:
-            name = extract_product_name(element)
-            price = extract_price(element)
-            description = extract_description(element)
-            image_url = extract_image(element, base_url)
-            
-            if name:
-                products.append({
-                    'name': name,
-                    'price': price,
-                    'description': description or f"Product: {name}",
-                    'images': [image_url] if image_url else [],
-                    'url': base_url
-                })
-        except Exception as e:
-            continue
-    
-    return products
-
-
-def find_products_by_pattern(soup: BeautifulSoup) -> list:
-    products = []
-    price_elements = soup.find_all(string=lambda text: text and ('$' in text or '€' in text or '£' in text))
-    
-    for price_elem in price_elements[:50]:
-        parent = price_elem.parent
-        heading = parent.find_previous(['h1', 'h2', 'h3', 'h4'])
-        if heading and len(heading.get_text(strip=True)) > 0:
-            products.append(parent)
-    
-    return products
-
-
-def extract_product_name(element) -> str:
-    name_elem = element.find(['h1', 'h2', 'h3', 'h4', 'a'])
-    if name_elem:
-        return name_elem.get_text(strip=True)
-    
-    name_elem = element.find(attrs={'itemprop': 'name'})
-    if name_elem:
-        return name_elem.get_text(strip=True)
-    
-    name_elem = element.find(class_=lambda x: x and ('name' in x.lower() or 'title' in x.lower()))
-    if name_elem:
-        return name_elem.get_text(strip=True)
-    
-    return "Product"
-
-
-def extract_price(element) -> float:
-    price_elem = element.find(attrs={'itemprop': 'price'})
-    if price_elem and price_elem.get('content'):
-        try:
-            return float(price_elem['content'])
-        except:
-            pass
-    
-    price_elem = element.find(class_=lambda x: x and 'price' in x.lower())
-    if price_elem:
-        price_text = price_elem.get_text(strip=True)
-        import re
-        match = re.search(r'[\d,]+\.?\d*', price_text.replace(',', ''))
-        if match:
-            try:
-                return float(match.group())
-            except:
-                pass
-    
-    text = element.get_text()
-    import re
-    price_match = re.search(r'\$\s*([\d,]+\.?\d*)', text.replace(',', ''))
-    if price_match:
-        try:
-            return float(price_match.group(1))
-        except:
-            pass
-    
-    return 0.0
-
-
-def extract_description(element) -> str:
-    desc_elem = element.find(attrs={'itemprop': 'description'})
-    if desc_elem:
-        return desc_elem.get_text(strip=True)
-    
-    desc_elem = element.find(class_=lambda x: x and ('description' in x.lower() or 'excerpt' in x.lower()))
-    if desc_elem:
-        return desc_elem.get_text(strip=True)[:500]
-    
-    p_elem = element.find('p')
-    if p_elem:
-        return p_elem.get_text(strip=True)[:500]
-    
-    return None
-
-
-def extract_image(element, base_url: str) -> str:
-    img_elem = element.find('img', attrs={'itemprop': 'image'})
-    if not img_elem:
-        img_elem = element.find('img')
-    
-    if img_elem:
-        src = img_elem.get('src') or img_elem.get('data-src')
-        if src:
-            if src.startswith('//'):
-                return 'https:' + src
-            elif src.startswith('/'):
-                from urllib.parse import urljoin
-                return urljoin(base_url, src)
-            return src
-    
-    return None
-
-
-def extract_business_name(soup: BeautifulSoup) -> str:
-    title = soup.find('title')
-    if title:
-        return title.get_text(strip=True).split('|')[0].strip()
-    
-    site_name = soup.find('meta', attrs={'property': 'og:site_name'})
-    if site_name and site_name.get('content'):
-        return site_name['content']
-    
-    h1 = soup.find('h1')
-    if h1:
-        return h1.get_text(strip=True)
-    
-    return "Business"
+**Now update `requirements.txt` - add this line:**
+```
+playwright==1.40.0
