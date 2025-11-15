@@ -157,13 +157,16 @@ def scrape_with_playwright(url: str, max_products: int = 50):
 @router.post("/crawl")
 async def crawl_website(req: CrawlRequest):
     """Crawl a website and extract products using Playwright"""
-    print(f"Starting crawl for URL: {req.url}")
+    print(f"Starting crawl for URL: {req.url}", flush=True)
     
     try:
-        # Run Playwright in thread since it's sync API
-        products, page_title = await asyncio.to_thread(
-            scrape_with_playwright, req.url, 50
+        # Add 90 second timeout
+        print("About to call scrape_with_playwright...", flush=True)
+        products, page_title = await asyncio.wait_for(
+            asyncio.to_thread(scrape_with_playwright, req.url, 50),
+            timeout=90.0
         )
+        print(f"Scraping completed, got {len(products)} products", flush=True)
         
         if not products:
             raise HTTPException(status_code=400, detail="No products found on this website")
@@ -219,7 +222,10 @@ async def crawl_website(req: CrawlRequest):
             "business_id": business_id,
             "product_count": len(products)
         }
-        
+    
+    except asyncio.TimeoutError:
+        print("ERROR: Scraping timed out after 90 seconds")
+        raise HTTPException(status_code=500, detail="Scraping timed out - site may be too slow")
     except HTTPException:
         raise
     except Exception as e:
