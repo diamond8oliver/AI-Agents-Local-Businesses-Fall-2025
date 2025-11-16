@@ -21,30 +21,31 @@ def scrape_with_playwright(url: str, max_products: int = 50):
     """
     products = []
     
+    print("=== STARTING PLAYWRIGHT ===", flush=True)
+    print(f"Opening Playwright context for URL: {url}", flush=True)
+    
     with sync_playwright() as p:
-        # Launch browser with low-memory args for Railway
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox', 
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--no-first-run',
-                '--no-zygote',
-                '--single-process',
-            ]
-        )
+        print("Playwright context opened", flush=True)
+        print("Launching Chromium browser...", flush=True)
+        
+        # Simple launch - you have 8GB RAM, no restrictions needed
+        browser = p.chromium.launch(headless=True)
+        print("✓ Browser launched successfully!", flush=True)
+        
         page = browser.new_page()
+        print("✓ New page created", flush=True)
         
         try:
-            print(f"Loading page: {url}", flush=True)
-            # Go to URL and wait for content to load
+            print(f"Navigating to: {url}", flush=True)
             page.goto(url, timeout=30000, wait_until="networkidle")
-            time.sleep(2)  # Extra wait for lazy-loaded content
+            print("✓ Page loaded", flush=True)
+            
+            time.sleep(2)
+            print("✓ Waited 2 seconds for lazy content", flush=True)
             
             # Get page title for business name
             page_title = page.title()
+            print(f"✓ Page title: {page_title}", flush=True)
             
             # Extract products - try multiple selectors
             product_selectors = [
@@ -61,17 +62,19 @@ def scrape_with_playwright(url: str, max_products: int = 50):
             elements = []
             for selector in product_selectors:
                 elements = page.query_selector_all(selector)
-                if len(elements) > 3:  # Need at least a few products
-                    print(f"Found {len(elements)} products with selector: {selector}", flush=True)
+                if len(elements) > 3:
+                    print(f"✓ Found {len(elements)} products with selector: {selector}", flush=True)
                     break
             
             if not elements or len(elements) < 3:
-                print("No products found with standard selectors", flush=True)
+                print("✗ No products found with standard selectors", flush=True)
                 browser.close()
                 return [], page_title
             
+            print(f"Extracting data from {min(len(elements), max_products)} products...", flush=True)
+            
             # Extract data from each product
-            for element in elements[:max_products]:
+            for idx, element in enumerate(elements[:max_products]):
                 try:
                     # Try multiple name selectors
                     name_selectors = [
@@ -85,7 +88,7 @@ def scrape_with_playwright(url: str, max_products: int = 50):
                         name_el = element.query_selector(ns)
                         if name_el:
                             name = name_el.inner_text().strip()
-                            if name and len(name) > 3 and len(name) < 200:  # Valid name
+                            if name and len(name) > 3 and len(name) < 200:
                                 break
                     
                     # Try multiple price selectors
@@ -99,7 +102,6 @@ def scrape_with_playwright(url: str, max_products: int = 50):
                         price_el = element.query_selector(ps)
                         if price_el:
                             price_text = price_el.inner_text().strip()
-                            # Extract numbers from "$99.99" or "99,99 €"
                             numbers = re.findall(r'\d+[.,]?\d*', price_text)
                             if numbers:
                                 price_str = numbers[0].replace(',', '.')
@@ -118,7 +120,7 @@ def scrape_with_playwright(url: str, max_products: int = 50):
                     for ds in desc_selectors:
                         desc_el = element.query_selector(ds)
                         if desc_el:
-                            description = desc_el.inner_text().strip()[:500]  # Max 500 chars
+                            description = desc_el.inner_text().strip()[:500]
                             if description and len(description) > 10:
                                 break
                     
@@ -133,7 +135,7 @@ def scrape_with_playwright(url: str, max_products: int = 50):
                             image_url = urljoin(url, image_url)
                     
                     # Product URL
-                    product_url = url  # Default to collection page
+                    product_url = url
                     link_el = element.query_selector('a')
                     if link_el:
                         href = link_el.get_attribute('href')
@@ -152,42 +154,50 @@ def scrape_with_playwright(url: str, max_products: int = 50):
                             'url': product_url,
                             'description': description or f"Product: {name}",
                         })
+                        if (idx + 1) % 10 == 0:
+                            print(f"  Processed {idx + 1} products...", flush=True)
                 
                 except Exception as e:
-                    print(f"Error extracting product: {e}", flush=True)
+                    print(f"  Error extracting product {idx}: {e}", flush=True)
                     continue
             
+            print(f"✓ Extracted {len(products)} products total", flush=True)
             browser.close()
+            print("✓ Browser closed", flush=True)
             return products, page_title
             
         except Exception as e:
-            print(f"Playwright error: {e}", flush=True)
+            print(f"✗ Playwright error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             browser.close()
             return [], ""
 
 @router.post("/crawl")
 async def crawl_website(req: CrawlRequest):
     """Crawl a website and extract products using Playwright"""
-    print(f"Starting crawl for URL: {req.url}", flush=True)
+    print(f"\n{'='*60}", flush=True)
+    print(f"NEW CRAWL REQUEST", flush=True)
+    print(f"URL: {req.url}", flush=True)
+    print(f"{'='*60}\n", flush=True)
     
     try:
-        # Add 90 second timeout
-        print("About to call scrape_with_playwright...", flush=True)
+        print("Calling scrape_with_playwright in thread...", flush=True)
         products, page_title = await asyncio.wait_for(
             asyncio.to_thread(scrape_with_playwright, req.url, 50),
             timeout=90.0
         )
-        print(f"Scraping completed, got {len(products)} products", flush=True)
+        print(f"✓ Scraping thread completed!", flush=True)
+        print(f"  Products found: {len(products)}", flush=True)
+        print(f"  Page title: {page_title}", flush=True)
         
         if not products:
             raise HTTPException(status_code=400, detail="No products found on this website")
         
-        print(f"Extracted {len(products)} products")
-        
         # Connect to Supabase
-        print("Connecting to Supabase...")
+        print("Connecting to Supabase...", flush=True)
         supabase = get_supabase_client()
-        print("Connected to Supabase")
+        print("✓ Connected to Supabase", flush=True)
         
         # Create business entry
         business_id = str(uuid.uuid4())
@@ -198,9 +208,9 @@ async def crawl_website(req: CrawlRequest):
             'created_at': None,
         }
         
-        print(f"Inserting business: {business_data}")
+        print(f"Inserting business: {business_data['business_name']}", flush=True)
         supabase.table('businesses').insert(business_data).execute()
-        print("Business inserted")
+        print("✓ Business inserted", flush=True)
         
         # Prepare products for insertion
         products_to_insert = []
@@ -219,13 +229,19 @@ async def crawl_website(req: CrawlRequest):
             products_to_insert.append(product_data)
         
         # Insert products in batches
-        print(f"Inserting {len(products_to_insert)} products")
+        print(f"Inserting {len(products_to_insert)} products to database...", flush=True)
         batch_size = 100
         for i in range(0, len(products_to_insert), batch_size):
             batch = products_to_insert[i:i+batch_size]
             supabase.table('products').insert(batch).execute()
+            print(f"  Inserted batch {i//batch_size + 1}", flush=True)
         
-        print("Products inserted")
+        print("✓ All products inserted", flush=True)
+        print(f"\n{'='*60}", flush=True)
+        print(f"CRAWL COMPLETED SUCCESSFULLY", flush=True)
+        print(f"Business ID: {business_id}", flush=True)
+        print(f"Products: {len(products)}", flush=True)
+        print(f"{'='*60}\n", flush=True)
         
         return {
             "status": "success",
@@ -235,12 +251,14 @@ async def crawl_website(req: CrawlRequest):
         }
     
     except asyncio.TimeoutError:
-        print("ERROR: Scraping timed out after 90 seconds", flush=True)
+        print("\n✗✗✗ TIMEOUT ERROR ✗✗✗", flush=True)
+        print("Scraping took longer than 90 seconds", flush=True)
         raise HTTPException(status_code=500, detail="Scraping timed out - site may be too slow")
     except HTTPException:
         raise
     except Exception as e:
-        print(f"ERROR: Crawl failed: {e}", flush=True)
+        print(f"\n✗✗✗ UNEXPECTED ERROR ✗✗✗", flush=True)
+        print(f"Error: {e}", flush=True)
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to crawl website: {str(e)}")
