@@ -22,12 +22,23 @@ def scrape_with_playwright(url: str, max_products: int = 50):
     products = []
     
     with sync_playwright() as p:
-        # Launch browser (headless for production)
-        browser = p.chromium.launch(headless=True)
+        # Launch browser with low-memory args for Railway
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox', 
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+            ]
+        )
         page = browser.new_page()
         
         try:
-            print(f"Loading page: {url}")
+            print(f"Loading page: {url}", flush=True)
             # Go to URL and wait for content to load
             page.goto(url, timeout=30000, wait_until="networkidle")
             time.sleep(2)  # Extra wait for lazy-loaded content
@@ -51,11 +62,11 @@ def scrape_with_playwright(url: str, max_products: int = 50):
             for selector in product_selectors:
                 elements = page.query_selector_all(selector)
                 if len(elements) > 3:  # Need at least a few products
-                    print(f"Found {len(elements)} products with selector: {selector}")
+                    print(f"Found {len(elements)} products with selector: {selector}", flush=True)
                     break
             
             if not elements or len(elements) < 3:
-                print("No products found with standard selectors")
+                print("No products found with standard selectors", flush=True)
                 browser.close()
                 return [], page_title
             
@@ -143,14 +154,14 @@ def scrape_with_playwright(url: str, max_products: int = 50):
                         })
                 
                 except Exception as e:
-                    print(f"Error extracting product: {e}")
+                    print(f"Error extracting product: {e}", flush=True)
                     continue
             
             browser.close()
             return products, page_title
             
         except Exception as e:
-            print(f"Playwright error: {e}")
+            print(f"Playwright error: {e}", flush=True)
             browser.close()
             return [], ""
 
@@ -224,12 +235,12 @@ async def crawl_website(req: CrawlRequest):
         }
     
     except asyncio.TimeoutError:
-        print("ERROR: Scraping timed out after 90 seconds")
+        print("ERROR: Scraping timed out after 90 seconds", flush=True)
         raise HTTPException(status_code=500, detail="Scraping timed out - site may be too slow")
     except HTTPException:
         raise
     except Exception as e:
-        print(f"ERROR: Crawl failed: {e}")
+        print(f"ERROR: Crawl failed: {e}", flush=True)
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to crawl website: {str(e)}")
