@@ -3,149 +3,119 @@ from pydantic import BaseModel
 from typing import Optional
 import uuid
 from src.database.supabase_client import get_supabase_client
-from playwright.sync_api import sync_playwright
-import time
+from playwright.async_api import async_playwright
 import re
 from urllib.parse import urljoin
-import asyncio
 
 router = APIRouter(prefix="/api", tags=["crawl"])
 
 class CrawlRequest(BaseModel):
     url: str
 
-def scrape_with_playwright(url: str, max_products: int = 50):
+async def scrape_with_playwright(url: str, max_products: int = 50):
     """
-    Scrape products from JavaScript-rendered sites using Playwright
+    Scrape products from JavaScript-rendered sites using Playwright ASYNC
     Returns: list of {name, price, image_url, url, description}
     """
     products = []
     
-    print("=== STARTING PLAYWRIGHT ===", flush=True)
-    print(f"Opening Playwright context for URL: {url}", flush=True)
+    print("=== STARTING PLAYWRIGHT ASYNC ===", flush=True)
     
-    with sync_playwright() as p:
-        print("Playwright context opened", flush=True)
-        print("Launching Chromium browser...", flush=True)
+    async with async_playwright() as p:
+        print("Launching Chromium...", flush=True)
+        browser = await p.chromium.launch(headless=True)
+        print("✓ Browser launched", flush=True)
         
-        # Simple launch - you have 8GB RAM, no restrictions needed
-        browser = p.chromium.launch(headless=True)
-        print("✓ Browser launched successfully!", flush=True)
-        
-        page = browser.new_page()
-        print("✓ New page created", flush=True)
+        page = await browser.new_page()
+        print("✓ Page created", flush=True)
         
         try:
             print(f"Navigating to: {url}", flush=True)
-            page.goto(url, timeout=30000, wait_until="networkidle")
+            await page.goto(url, timeout=30000, wait_until="networkidle")
             print("✓ Page loaded", flush=True)
             
-            time.sleep(2)
-            print("✓ Waited 2 seconds for lazy content", flush=True)
+            await page.wait_for_timeout(2000)
+            print("✓ Waited for content", flush=True)
             
-            # Get page title for business name
-            page_title = page.title()
+            page_title = await page.title()
             print(f"✓ Page title: {page_title}", flush=True)
             
-            # Extract products - try multiple selectors
+            # Extract products
             product_selectors = [
-                # Shopify
                 'div.product-card, div.product-item, div.grid-product, div.grid__item',
-                # WooCommerce
                 'li.product, div.product, ul.products li',
-                # Generic
                 'article[data-product], div[data-product-id], [class*="product-"]',
-                # Broader fallback
                 'article, li[class*="product"], div[class*="product-card"]',
             ]
             
             elements = []
             for selector in product_selectors:
-                elements = page.query_selector_all(selector)
+                elements = await page.query_selector_all(selector)
                 if len(elements) > 3:
-                    print(f"✓ Found {len(elements)} products with selector: {selector}", flush=True)
+                    print(f"✓ Found {len(elements)} products with: {selector}", flush=True)
                     break
             
             if not elements or len(elements) < 3:
-                print("✗ No products found with standard selectors", flush=True)
-                browser.close()
+                print("✗ No products found", flush=True)
+                await browser.close()
                 return [], page_title
             
-            print(f"Extracting data from {min(len(elements), max_products)} products...", flush=True)
+            print(f"Extracting from {min(len(elements), max_products)} products...", flush=True)
             
-            # Extract data from each product
             for idx, element in enumerate(elements[:max_products]):
                 try:
-                    # Try multiple name selectors
-                    name_selectors = [
-                        'h2', 'h3', 'h4',
-                        '.product-title', '.product__title', '.product-card__title',
-                        '[class*="title"]', '[class*="name"]',
-                        'a[class*="product"]',
-                    ]
+                    # Name
+                    name_selectors = ['h2', 'h3', 'h4', '.product-title', '.product__title', '[class*="title"]']
                     name = None
                     for ns in name_selectors:
-                        name_el = element.query_selector(ns)
+                        name_el = await element.query_selector(ns)
                         if name_el:
-                            name = name_el.inner_text().strip()
-                            if name and len(name) > 3 and len(name) < 200:
+                            name = (await name_el.inner_text()).strip()
+                            if name and 3 < len(name) < 200:
                                 break
                     
-                    # Try multiple price selectors
-                    price_selectors = [
-                        '.price', 'span.price', 'div.price',
-                        '[class*="price"]', '[data-price]',
-                        '.money', 'span.money',
-                    ]
+                    # Price
+                    price_selectors = ['.price', 'span.price', '[class*="price"]', '.money']
                     price = 0.0
                     for ps in price_selectors:
-                        price_el = element.query_selector(ps)
+                        price_el = await element.query_selector(ps)
                         if price_el:
-                            price_text = price_el.inner_text().strip()
+                            price_text = (await price_el.inner_text()).strip()
                             numbers = re.findall(r'\d+[.,]?\d*', price_text)
                             if numbers:
-                                price_str = numbers[0].replace(',', '.')
                                 try:
-                                    price = float(price_str)
+                                    price = float(numbers[0].replace(',', '.'))
                                     break
                                 except:
                                     continue
                     
-                    # Description (optional)
+                    # Description
                     description = None
-                    desc_selectors = [
-                        '.product-description', '.description',
-                        '[class*="description"]', 'p',
-                    ]
-                    for ds in desc_selectors:
-                        desc_el = element.query_selector(ds)
-                        if desc_el:
-                            description = desc_el.inner_text().strip()[:500]
-                            if description and len(description) > 10:
-                                break
+                    desc_el = await element.query_selector('.product-description, .description, p')
+                    if desc_el:
+                        description = (await desc_el.inner_text()).strip()[:500]
                     
                     # Image
                     image_url = None
-                    img_el = element.query_selector('img')
+                    img_el = await element.query_selector('img')
                     if img_el:
-                        image_url = img_el.get_attribute('src') or img_el.get_attribute('data-src')
+                        image_url = await img_el.get_attribute('src') or await img_el.get_attribute('data-src')
                         if image_url and image_url.startswith('//'):
                             image_url = 'https:' + image_url
                         elif image_url and not image_url.startswith('http'):
                             image_url = urljoin(url, image_url)
                     
-                    # Product URL
+                    # URL
                     product_url = url
-                    link_el = element.query_selector('a')
+                    link_el = await element.query_selector('a')
                     if link_el:
-                        href = link_el.get_attribute('href')
+                        href = await link_el.get_attribute('href')
                         if href:
                             if href.startswith('http'):
                                 product_url = href
                             elif href.startswith('/'):
                                 product_url = urljoin(url, href)
                     
-                    # Only add if we got a valid name
                     if name and len(name) > 3:
                         products.append({
                             'name': name,
@@ -154,52 +124,45 @@ def scrape_with_playwright(url: str, max_products: int = 50):
                             'url': product_url,
                             'description': description or f"Product: {name}",
                         })
+                        
                         if (idx + 1) % 10 == 0:
-                            print(f"  Processed {idx + 1} products...", flush=True)
+                            print(f"  Processed {idx + 1}...", flush=True)
                 
                 except Exception as e:
-                    print(f"  Error extracting product {idx}: {e}", flush=True)
+                    print(f"  Error on product {idx}: {e}", flush=True)
                     continue
             
-            print(f"✓ Extracted {len(products)} products total", flush=True)
-            browser.close()
-            print("✓ Browser closed", flush=True)
+            print(f"✓ Extracted {len(products)} products", flush=True)
+            await browser.close()
             return products, page_title
             
         except Exception as e:
-            print(f"✗ Playwright error: {e}", flush=True)
+            print(f"✗ Error: {e}", flush=True)
             import traceback
             traceback.print_exc()
-            browser.close()
+            await browser.close()
             return [], ""
 
 @router.post("/crawl")
 async def crawl_website(req: CrawlRequest):
     """Crawl a website and extract products using Playwright"""
     print(f"\n{'='*60}", flush=True)
-    print(f"NEW CRAWL REQUEST", flush=True)
-    print(f"URL: {req.url}", flush=True)
+    print(f"CRAWL REQUEST: {req.url}", flush=True)
     print(f"{'='*60}\n", flush=True)
     
     try:
-        print("Calling scrape_with_playwright in thread...", flush=True)
-        products, page_title = await asyncio.wait_for(
-            asyncio.to_thread(scrape_with_playwright, req.url, 50),
-            timeout=90.0
-        )
-        print(f"✓ Scraping thread completed!", flush=True)
-        print(f"  Products found: {len(products)}", flush=True)
-        print(f"  Page title: {page_title}", flush=True)
+        # Use async Playwright directly (no thread needed)
+        products, page_title = await scrape_with_playwright(req.url, 50)
         
         if not products:
-            raise HTTPException(status_code=400, detail="No products found on this website")
+            raise HTTPException(status_code=400, detail="No products found")
         
-        # Connect to Supabase
+        print(f"✓ Got {len(products)} products", flush=True)
+        
+        # Supabase
         print("Connecting to Supabase...", flush=True)
         supabase = get_supabase_client()
-        print("✓ Connected to Supabase", flush=True)
         
-        # Create business entry
         business_id = str(uuid.uuid4())
         business_data = {
             'id': business_id,
@@ -208,14 +171,12 @@ async def crawl_website(req: CrawlRequest):
             'created_at': None,
         }
         
-        print(f"Inserting business: {business_data['business_name']}", flush=True)
         supabase.table('businesses').insert(business_data).execute()
         print("✓ Business inserted", flush=True)
         
-        # Prepare products for insertion
         products_to_insert = []
         for product in products:
-            product_data = {
+            products_to_insert.append({
                 'id': str(uuid.uuid4()),
                 'business_id': business_id,
                 'name': product['name'],
@@ -225,23 +186,15 @@ async def crawl_website(req: CrawlRequest):
                 'url': product['url'],
                 'in_stock': True,
                 'created_at': None,
-            }
-            products_to_insert.append(product_data)
+            })
         
-        # Insert products in batches
-        print(f"Inserting {len(products_to_insert)} products to database...", flush=True)
+        # Insert in batches
         batch_size = 100
         for i in range(0, len(products_to_insert), batch_size):
             batch = products_to_insert[i:i+batch_size]
             supabase.table('products').insert(batch).execute()
-            print(f"  Inserted batch {i//batch_size + 1}", flush=True)
         
-        print("✓ All products inserted", flush=True)
-        print(f"\n{'='*60}", flush=True)
-        print(f"CRAWL COMPLETED SUCCESSFULLY", flush=True)
-        print(f"Business ID: {business_id}", flush=True)
-        print(f"Products: {len(products)}", flush=True)
-        print(f"{'='*60}\n", flush=True)
+        print(f"✓ COMPLETE - {len(products)} products inserted\n", flush=True)
         
         return {
             "status": "success",
@@ -250,15 +203,10 @@ async def crawl_website(req: CrawlRequest):
             "product_count": len(products)
         }
     
-    except asyncio.TimeoutError:
-        print("\n✗✗✗ TIMEOUT ERROR ✗✗✗", flush=True)
-        print("Scraping took longer than 90 seconds", flush=True)
-        raise HTTPException(status_code=500, detail="Scraping timed out - site may be too slow")
     except HTTPException:
         raise
     except Exception as e:
-        print(f"\n✗✗✗ UNEXPECTED ERROR ✗✗✗", flush=True)
-        print(f"Error: {e}", flush=True)
+        print(f"✗✗✗ ERROR: {e}", flush=True)
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to crawl website: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
