@@ -1,4 +1,3 @@
-cat > src/api/routes/crawl.py << 'ENDOFFILE'
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -182,4 +181,3 @@ async def crawl_website(req: CrawlRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
-ENDOFFILE
