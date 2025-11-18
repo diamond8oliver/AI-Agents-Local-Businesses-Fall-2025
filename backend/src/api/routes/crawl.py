@@ -45,9 +45,15 @@ def scrape_with_scrapingbee(url: str, max_products: int = 50):
     
     product_selectors = [
         'div.product-card',
-        'div.product-item',
+        'div.product-item', 
         'li.product',
         'div.product',
+        'article.product',
+        '[data-product]',
+        '[data-product-id]',
+        'div[class*="product"]',
+        'li[class*="product"]',
+        'article[class*="product"]',
     ]
     
     elements = []
@@ -64,7 +70,7 @@ def scrape_with_scrapingbee(url: str, max_products: int = 50):
     for idx, element in enumerate(elements[:max_products]):
         try:
             name = None
-            for sel in ['h2', 'h3', '.product-title']:
+            for sel in ['h2', 'h3', '.product-title', '[class*="title"]', '[class*="name"]']:
                 name_el = element.select_one(sel)
                 if name_el:
                     name = name_el.get_text().strip()
@@ -72,7 +78,7 @@ def scrape_with_scrapingbee(url: str, max_products: int = 50):
                         break
             
             price = 0.0
-            for sel in ['.price', '[class*="price"]']:
+            for sel in ['.price', '[class*="price"]', '.money']:
                 price_el = element.select_one(sel)
                 if price_el:
                     price_text = price_el.get_text().strip()
