@@ -106,4 +106,4 @@ app.include_router(product_crawl_router)
 app.include_router(scheduled_router)
 app.include_router(crawl_router)
 
-print("✓ APP STARTED SUCCESSFULLY", flush=True)
+print("✓ APP STARTED SUCCESSFULLY", flush=True)# Force restart
