@@ -1,4 +1,4 @@
-Updated: Nov 18 2025
+# Updated: Nov 18 2025
 print("=== STARTING APP ===", flush=True)
 import sys
 print(f"Python version: {sys.version}", flush=True)
