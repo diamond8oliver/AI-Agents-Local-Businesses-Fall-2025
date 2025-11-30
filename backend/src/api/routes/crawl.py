@@ -383,7 +383,7 @@ async def crawl_website(req: CrawlRequest):
                 'name': product['name'],
                 'price': product['price'],
                 'description': product['description'],
-                'image_url': product['image_url'],
+                'images': [product['image_url']] if product['image_url'] else [],  # FIXED: Changed from image_url to images array
                 'url': product['url'],
                 'in_stock': True,  # Default to in stock
                 'created_at': datetime.utcnow().isoformat(),
