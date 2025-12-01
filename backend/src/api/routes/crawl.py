@@ -50,9 +50,9 @@ def scrape_with_scrapingbee(url: str, max_products: int = 50) -> tuple[List[dict
             params={
                 'api_key': api_key,
                 'url': url,
-                'render_js': 'true',  # Render JavaScript
-                'wait': 3000,  # Wait 3 seconds for content to load
-                'premium_proxy': 'false',  # Use regular proxy (free tier)
+                'render_js': 'true',
+                'wait': 3000,
+                'premium_proxy': 'false',
             },
             timeout=90
         )
@@ -100,7 +100,7 @@ def scrape_with_scrapingbee(url: str, max_products: int = 50) -> tuple[List[dict
     for selector_group in product_selectors:
         for selector in selector_group.split(', '):
             found = soup.select(selector)
-            if len(found) >= 3:  # Need at least 3 products to consider it valid
+            if len(found) >= 3:
                 elements = found
                 matched_selector = selector
                 break
@@ -124,7 +124,6 @@ def scrape_with_scrapingbee(url: str, max_products: int = 50) -> tuple[List[dict
                 products.append(product_data)
                 extracted_count += 1
                 
-                # Progress update every 10 products
                 if extracted_count % 10 == 0:
                     print(f"  → Processed {extracted_count} products...", flush=True)
         
@@ -136,33 +135,127 @@ def scrape_with_scrapingbee(url: str, max_products: int = 50) -> tuple[List[dict
     return products, page_title
 
 
+def extract_category_from_name(name: str) -> Optional[str]:
+    """
+    Extract product category from name using comprehensive keyword matching
+    Works for any type of product across multiple industries
+    """
+    if not name:
+        return None
+    
+    name_lower = name.lower()
+    
+    # Comprehensive category keywords (order matters - check specific before general)
+    categories = {
+        # Clothing & Fashion
+        'Jeans': ['jean', 'denim'],
+        'Shirts & Tops': ['tee', 't-shirt', 'shirt', 'top', 'blouse', 'tank', 'polo', 'button-up', 'button-down'],
+        'Hoodies & Sweatshirts': ['hoodie', 'sweatshirt', 'sweater', 'pullover', 'crewneck'],
+        'Jackets & Coats': ['jacket', 'coat', 'puffer', 'windbreaker', 'blazer', 'parka', 'vest'],
+        'Shorts': ['short'],
+        'Pants': ['pant', 'trouser', 'jogger', 'sweatpant', 'chino', 'cargo'],
+        'Dresses & Skirts': ['dress', 'skirt', 'gown', 'maxi', 'midi'],
+        'Shoes': ['shoe', 'sneaker', 'boot', 'sandal', 'heel', 'loafer', 'slipper', 'clog'],
+        'Accessories': ['hat', 'cap', 'beanie', 'scarf', 'glove', 'belt', 'tie', 'watch', 'sunglasses', 'bag', 'backpack', 'wallet', 'purse'],
+        'Socks & Underwear': ['sock', 'underwear', 'brief', 'boxer', 'bra'],
+        
+        # Electronics & Tech
+        'Computers & Laptops': ['laptop', 'computer', 'macbook', 'pc', 'desktop', 'chromebook'],
+        'Phones & Tablets': ['phone', 'iphone', 'android', 'tablet', 'ipad', 'smartphone'],
+        'Audio': ['headphone', 'earbuds', 'airpod', 'speaker', 'soundbar', 'microphone'],
+        'Cameras': ['camera', 'lens', 'gopro', 'dslr', 'mirrorless'],
+        'Gaming': ['gaming', 'playstation', 'xbox', 'nintendo', 'console', 'controller'],
+        'Smart Home': ['smart home', 'alexa', 'echo', 'nest', 'ring', 'thermostat'],
+        'TV & Video': ['tv', 'television', 'monitor', 'display', 'projector'],
+        
+        # Home & Garden
+        'Furniture': ['chair', 'table', 'desk', 'sofa', 'couch', 'bed', 'dresser', 'shelf', 'cabinet'],
+        'Kitchen': ['pan', 'pot', 'knife', 'blender', 'mixer', 'toaster', 'cookware', 'cutlery'],
+        'Bedding': ['sheet', 'pillow', 'blanket', 'comforter', 'duvet', 'mattress'],
+        'Decor': ['lamp', 'rug', 'curtain', 'mirror', 'frame', 'vase', 'candle'],
+        'Garden & Outdoor': ['plant', 'seed', 'garden', 'lawn', 'grill', 'patio'],
+        'Tools': ['drill', 'hammer', 'saw', 'wrench', 'screwdriver', 'toolbox'],
+        
+        # Sports & Outdoors
+        'Camping & Hiking': ['tent', 'sleeping bag', 'backpack', 'hiking', 'camp'],
+        'Fitness': ['dumbbell', 'yoga', 'weight', 'treadmill', 'exercise', 'gym'],
+        'Bikes': ['bike', 'bicycle', 'cycling'],
+        'Skateboards': ['skateboard', 'deck', 'longboard'],
+        'Water Sports': ['surfboard', 'kayak', 'paddleboard', 'swim'],
+        'Team Sports': ['basketball', 'football', 'soccer', 'baseball', 'tennis'],
+        
+        # Beauty & Personal Care
+        'Skincare': ['serum', 'moisturizer', 'cleanser', 'toner', 'cream', 'lotion', 'sunscreen'],
+        'Makeup': ['lipstick', 'foundation', 'mascara', 'eyeshadow', 'blush', 'makeup'],
+        'Hair Care': ['shampoo', 'conditioner', 'hair oil', 'hair mask', 'styling'],
+        'Fragrance': ['perfume', 'cologne', 'fragrance', 'scent'],
+        'Bath & Body': ['body wash', 'soap', 'bath', 'shower'],
+        
+        # Food & Beverages
+        'Coffee & Tea': ['coffee', 'tea', 'espresso'],
+        'Snacks': ['chip', 'cookie', 'candy', 'chocolate', 'snack'],
+        'Beverages': ['juice', 'soda', 'water', 'drink'],
+        
+        # Books & Media
+        'Books': ['book', 'novel', 'textbook', 'cookbook'],
+        'Music': ['vinyl', 'cd', 'album', 'record'],
+        'Movies': ['dvd', 'blu-ray', 'movie'],
+        
+        # Toys & Games
+        'Toys': ['toy', 'doll', 'action figure', 'lego', 'puzzle'],
+        'Board Games': ['board game', 'card game', 'game'],
+        
+        # Baby & Kids
+        'Baby Gear': ['stroller', 'crib', 'car seat', 'baby carrier'],
+        'Baby Clothing': ['onesie', 'baby clothes', 'infant'],
+        
+        # Health & Wellness
+        'Supplements': ['vitamin', 'supplement', 'protein', 'probiotic'],
+        'Medical': ['thermometer', 'blood pressure', 'first aid'],
+        
+        # Pet Products
+        'Pet Supplies': ['dog', 'cat', 'pet', 'leash', 'collar', 'pet food'],
+        
+        # Office & Stationery
+        'Office Supplies': ['pen', 'pencil', 'notebook', 'paper', 'binder', 'stapler'],
+        
+        # Automotive
+        'Auto Parts': ['tire', 'battery', 'oil', 'filter', 'brake', 'spark plug'],
+        
+        # Jewelry
+        'Jewelry': ['ring', 'necklace', 'bracelet', 'earring', 'chain'],
+    }
+    
+    # Check for category matches
+    for category, keywords in categories.items():
+        for keyword in keywords:
+            if keyword in name_lower:
+                return category
+    
+    # Default category
+    return 'Other'
+
+
 def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Optional[dict]:
     """
     Extract structured product data from a product element
-    Returns dict with name, price, image_url, url, description or None if invalid
+    Returns dict with name, price, image_url, url, description, category or None if invalid
     """
     
-    # ===== PRODUCT NAME EXTRACTION (IMPROVED) =====
+    # ===== PRODUCT NAME EXTRACTION =====
     name = None
     name_selectors = [
-        # Specific class-based selectors (most reliable)
         'h2.product-title',
         'h3.product-name',
         'h4.product__title',
         '.product-card__title',
         '.product-title',
         '.product-name',
-        
-        # Attribute-based selectors
         '[data-product-name]',
         '[data-product-title]',
-        
-        # Link-based selectors (product links often contain name)
         'a.product-link',
         'a.product-card__link',
         'a[href*="/products/"]',
-        
-        # Generic heading selectors (fallback)
         '.product-card h2',
         '.product-card h3',
         '.product-card h4',
@@ -172,7 +265,6 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
     for selector in name_selectors:
         name_el = element.select_one(selector)
         if name_el:
-            # Try data attribute first
             if name_el.get('data-product-name'):
                 potential_name = name_el.get('data-product-name').strip()
             elif name_el.get('data-product-title'):
@@ -180,12 +272,10 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
             else:
                 potential_name = name_el.get_text().strip()
             
-            # Validate the name
             if validate_product_name(potential_name):
                 name = potential_name
                 break
     
-    # If still no name, try getting it from the first link's title or aria-label
     if not name:
         link_el = element.select_one('a')
         if link_el:
@@ -194,7 +284,6 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
             elif link_el.get('aria-label'):
                 name = link_el.get('aria-label').strip()
     
-    # Final validation
     if not name or not validate_product_name(name):
         return None
     
@@ -212,18 +301,14 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
     for selector in price_selectors:
         price_el = element.select_one(selector)
         if price_el:
-            # Try data attribute first
             if price_el.get('data-product-price'):
                 price_text = price_el.get('data-product-price')
             else:
                 price_text = price_el.get_text().strip()
             
-            # Extract numbers from price text
-            # Handle formats: $99.99, €99,99, 99.99, 99,99
             numbers = re.findall(r'\d+[.,]?\d*', price_text)
             if numbers:
                 try:
-                    # Take the first number found, replace comma with period
                     price = float(numbers[0].replace(',', '.'))
                     break
                 except ValueError:
@@ -234,11 +319,9 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
     img_el = element.select_one('img')
     
     if img_el:
-        # Try multiple image source attributes
         for attr in ['src', 'data-src', 'data-lazy-src', 'data-srcset']:
             img_src = img_el.get(attr)
             if img_src:
-                # Handle protocol-relative URLs
                 if img_src.startswith('//'):
                     image_url = 'https:' + img_src
                 elif img_src.startswith('http'):
@@ -248,7 +331,6 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
                 else:
                     image_url = urljoin(base_url, img_src)
                 
-                # Clean up srcset if needed (take first URL)
                 if ' ' in image_url:
                     image_url = image_url.split(' ')[0]
                 
@@ -281,13 +363,15 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
         desc_el = element.select_one(selector)
         if desc_el:
             desc_text = desc_el.get_text().strip()
-            if len(desc_text) > 10:  # Need reasonable description
-                description = desc_text[:500]  # Limit to 500 chars
+            if len(desc_text) > 10:
+                description = desc_text[:500]
                 break
     
-    # Use product name as fallback description
     if not description:
         description = f"Product: {name}"
+    
+    # ===== CATEGORY EXTRACTION =====
+    category = extract_category_from_name(name)
     
     # Return structured product data
     return {
@@ -296,6 +380,7 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
         'image_url': image_url,
         'url': product_url,
         'description': description,
+        'category': category,
     }
 
 
@@ -307,11 +392,9 @@ def validate_product_name(name: str) -> bool:
     if not name:
         return False
     
-    # Length checks
     if len(name) < 3 or len(name) > 200:
         return False
     
-    # Reject generic placeholder names
     invalid_names = [
         'product', 'products', 'item', 'items',
         'shop', 'buy now', 'add to cart', 'quick view',
@@ -322,7 +405,6 @@ def validate_product_name(name: str) -> bool:
     if name.lower() in invalid_names:
         return False
     
-    # Must contain at least one alphanumeric character
     if not re.search(r'[a-zA-Z0-9]', name):
         return False
     
@@ -383,13 +465,14 @@ async def crawl_website(req: CrawlRequest):
                 'name': product['name'],
                 'price': product['price'],
                 'description': product['description'],
-                'images': [product['image_url']] if product['image_url'] else [],  # FIXED: Changed from image_url to images array
+                'images': [product['image_url']] if product['image_url'] else [],
                 'url': product['url'],
-                'in_stock': True,  # Default to in stock
+                'in_stock': True,
+                'category': product.get('category'),
                 'created_at': datetime.utcnow().isoformat(),
             })
         
-        # Insert products in batches (Supabase has limits)
+        # Insert products in batches
         batch_size = 50
         for i in range(0, len(products_to_insert), batch_size):
             batch = products_to_insert[i:i + batch_size]
@@ -407,16 +490,13 @@ async def crawl_website(req: CrawlRequest):
         )
         
     except HTTPException:
-        # Re-raise HTTP exceptions (expected errors)
         raise
         
     except Exception as e:
-        # Log unexpected errors with full traceback
         error_msg = f"Crawl failed: {str(e)}"
         print(f"\n✗ ERROR: {error_msg}", flush=True)
         print(traceback.format_exc(), flush=True)
         
-        # Return user-friendly error
         raise HTTPException(
             status_code=500,
             detail=f"Failed to crawl website: {str(e)}"
