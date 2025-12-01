@@ -32,36 +32,38 @@ def extract_filters(query: str):
     if between_match:
         min_price, max_price = float(between_match.group(1)), float(between_match.group(2))
     
-    # Category/type keywords
-    keywords = []
+    # Category keywords (must match)
+    category_keywords = []
     
     category_map = {
         'shirts': ['shirt', 'tshirt', 't-shirt', 'tee', 'top'],
-        'pants': ['pants', 'jeans', 'trouser'],
-        'shorts': ['shorts'],
-        'hoodies': ['hoodie', 'sweatshirt', 'sweater'],
-        'jackets': ['jacket', 'coat'],
-        'shoes': ['shoe', 'sneaker', 'boot'],
-        'accessories': ['hat', 'cap', 'bag', 'belt', 'scarf'],
+        'pants': ['pants', 'pant', 'jeans', 'jean', 'denim', 'trouser'],
+        'shorts': ['shorts', 'short'],
+        'hoodies': ['hoodie', 'sweatshirt', 'sweater', 'pullover', 'crewneck', 'zip up', 'zip-up'],
+        'jackets': ['jacket', 'coat', 'puffer', 'windbreaker'],
+        'shoes': ['shoe', 'shoes', 'sneaker', 'sneakers', 'boot', 'boots', 'footwear', 'kicks'],
     }
     
     for category, terms in category_map.items():
         for term in terms:
             if term in query_lower:
-                keywords.extend(terms)
+                category_keywords = terms  # Use these specific terms
                 break
+        if category_keywords:
+            break
     
-    # Colors
+    # Color keywords (optional additional filter)
+    color_keywords = []
     colors = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'gray', 'grey', 'brown']
     for color in colors:
         if color in query_lower:
-            keywords.append(color)
+            color_keywords.append(color)
     
-    return min_price, max_price, keywords
+    return min_price, max_price, category_keywords, color_keywords
 
 def filter_products(products: List[dict], query: str) -> List[dict]:
-    """Filter products by price and keywords"""
-    min_price, max_price, keywords = extract_filters(query)
+    """Filter products by price, category, and color"""
+    min_price, max_price, category_keywords, color_keywords = extract_filters(query)
     
     filtered = []
     for product in products:
@@ -71,13 +73,17 @@ def filter_products(products: List[dict], query: str) -> List[dict]:
         if not (min_price <= price <= max_price):
             continue
         
-        # Keyword filter
-        if keywords:
-            name_lower = product.get('name', '').lower()
-            desc_lower = product.get('description', '').lower()
-            category_lower = product.get('category', '').lower()
-            
-            if not any(kw in name_lower or kw in desc_lower or kw in category_lower for kw in keywords):
+        name_lower = product.get('name', '').lower()
+        category_lower = product.get('category', '').lower()
+        
+        # Category filter (if specified, MUST match)
+        if category_keywords:
+            if not any(kw in name_lower or kw in category_lower for kw in category_keywords):
+                continue
+        
+        # Color filter (if specified, MUST match)
+        if color_keywords:
+            if not any(color in name_lower for color in color_keywords):
                 continue
         
         filtered.append(product)
