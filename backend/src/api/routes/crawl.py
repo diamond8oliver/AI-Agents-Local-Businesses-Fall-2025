@@ -236,10 +236,44 @@ def extract_category_from_name(name: str) -> Optional[str]:
     return 'Other'
 
 
+def extract_colors_from_name(name: str) -> List[str]:
+    """Extract colors from product name"""
+    if not name:
+        return []
+    
+    name_lower = name.lower()
+    colors = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'gray', 'grey', 'brown', 'beige', 'navy', 'olive', 'burgundy', 'maroon', 'teal', 'cream', 'tan', 'vintage']
+    
+    found_colors = []
+    for color in colors:
+        if color in name_lower:
+            found_colors.append(color.capitalize())
+    
+    return list(set(found_colors))  # Remove duplicates
+
+
+def extract_sizes_from_name(name: str) -> List[str]:
+    """Extract sizes from product name"""
+    if not name:
+        return []
+    
+    name_lower = name.lower()
+    sizes = ['xs', 'small', 's', 'medium', 'm', 'large', 'l', 'xl', 'xxl', '2xl', '3xl', 
+             'one size', 'os', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12']
+    
+    found_sizes = []
+    for size in sizes:
+        # Match whole words
+        if f' {size} ' in f' {name_lower} ' or name_lower.endswith(f' {size}'):
+            found_sizes.append(size.upper())
+    
+    return list(set(found_sizes))
+
+
 def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Optional[dict]:
     """
     Extract structured product data from a product element
-    Returns dict with name, price, image_url, url, description, category or None if invalid
+    Returns dict with name, price, image_url, url, description, category, colors, sizes or None if invalid
     """
     
     # ===== PRODUCT NAME EXTRACTION =====
@@ -370,8 +404,10 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
     if not description:
         description = f"Product: {name}"
     
-    # ===== CATEGORY EXTRACTION =====
+    # ===== CATEGORY, COLORS, SIZES EXTRACTION =====
     category = extract_category_from_name(name)
+    colors = extract_colors_from_name(name)
+    sizes = extract_sizes_from_name(name)
     
     # Return structured product data
     return {
@@ -381,6 +417,8 @@ def extract_product_data(element: BeautifulSoup, base_url: str, idx: int) -> Opt
         'url': product_url,
         'description': description,
         'category': category,
+        'colors': colors,
+        'sizes': sizes,
     }
 
 
@@ -469,6 +507,8 @@ async def crawl_website(req: CrawlRequest):
                 'url': product['url'],
                 'in_stock': True,
                 'category': product.get('category'),
+                'colors': product.get('colors', []),
+                'sizes': product.get('sizes', []),
                 'created_at': datetime.utcnow().isoformat(),
             })
         
