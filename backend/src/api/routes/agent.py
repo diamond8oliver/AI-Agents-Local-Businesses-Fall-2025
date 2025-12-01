@@ -36,25 +36,32 @@ def extract_filters(query: str):
     category_keywords = []
     
     category_map = {
+        # Clothing
         'shirts': ['shirt', 'tshirt', 't-shirt', 'tee', 'top'],
         'pants': ['pants', 'pant', 'jeans', 'jean', 'denim', 'trouser'],
         'shorts': ['shorts', 'short'],
         'hoodies': ['hoodie', 'sweatshirt', 'sweater', 'pullover', 'crewneck', 'zip up', 'zip-up'],
         'jackets': ['jacket', 'coat', 'puffer', 'windbreaker'],
         'shoes': ['shoe', 'shoes', 'sneaker', 'sneakers', 'boot', 'boots', 'footwear', 'kicks'],
+        
+        # Coffee subcategories
+        'coffee_pods': ['pod', 'pods', 'k-cup', 'kcup', 'capsule', 'capsules'],
+        'coffee_beans': ['bean', 'beans', 'whole bean', 'ground coffee', 'roasted coffee', 'ground'],
+        'tea': ['tea', 'loose leaf', 'rooibos', 'botanical', 'herbal'],
+        'coffee_general': ['coffee', 'espresso', 'roast', 'blend'],
     }
     
     for category, terms in category_map.items():
         for term in terms:
             if term in query_lower:
-                category_keywords = terms  # Use these specific terms
+                category_keywords = terms
                 break
         if category_keywords:
             break
     
     # Color keywords (optional additional filter)
     color_keywords = []
-    colors = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'gray', 'grey', 'brown']
+    colors = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'gray', 'grey', 'brown', 'vintage']
     for color in colors:
         if color in query_lower:
             color_keywords.append(color)
