@@ -43,6 +43,10 @@ def extract_filters(query: str):
         'hoodies': ['hoodie', 'sweatshirt', 'sweater', 'pullover', 'crewneck', 'zip up', 'zip-up'],
         'jackets': ['jacket', 'coat', 'puffer', 'windbreaker'],
         'shoes': ['shoe', 'shoes', 'sneaker', 'sneakers', 'boot', 'boots', 'footwear', 'kicks'],
+        'accessories': ['accessory', 'accessories', 'hat', 'cap', 'bag', 'wallet', 'belt', 'backpack'],
+        
+        # Skate
+        'skateboards': ['skateboard', 'deck', 'board', 'longboard'],
         
         # Coffee subcategories
         'coffee_pods': ['pod', 'pods', 'k-cup', 'kcup', 'capsule', 'capsules'],
